@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-# from ultralytics import YOLO
+from ultralytics import YOLO
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
@@ -21,7 +21,7 @@ class Detection:
         self.FPS = None
         self.previous_time = 0
         self.classification = ''
-        self.subframe = ()
+        self.subframe = [[], []]
 
     def get_video_size(self):
         media_info = MediaInfo.parse(self.source)
@@ -35,7 +35,7 @@ class Detection:
         return cv2.flip(frame, 1)
 
     def show(self):
-        # self.init_YOLO_model()
+        self.init_YOLO_model()
         self.init_MP_gesture_model()
         self.init_MP_model()
 
@@ -58,11 +58,17 @@ class Detection:
 
             frame = cv2.resize(frame, self.size)
 
+            if len(self.subframe[0]):
+                print('X:', self.subframe[0])
+                print('Y:', self.subframe[1])
+                subframe = frame[self.subframe[1][0]:self.subframe[1][1], self.subframe[0][0]:self.subframe[0][1]]
+            else:
+                subframe = frame
 
-
-            # self.mark_guitar(frame)
+            # self.mark_gesture(frame)
+            self.mark_gesture(np.array(subframe))
             self.mark_fingers(frame)
-            self.mark_gesture(frame)
+            self.mark_guitar(frame)
             self.display_classification(frame, self.classification)
             self.display_FPS(frame)
 
@@ -75,7 +81,7 @@ class Detection:
 
 
     def init_YOLO_model(self):
-        self.guitar_model = YOLO('best_run1.pt')
+        self.guitar_model = YOLO('models/best_run1.pt')
         data = open("coco.txt", "r").read()
         self.class_list = data.split("\n")
 
@@ -85,17 +91,22 @@ class Detection:
         self.mp_drawing_utils = mp.solutions.drawing_utils
 
     def init_MP_gesture_model(self):
-        model_path = os.path.abspath('models/C_G_D_model.task')
-        self.recognizer = vision.GestureRecognizer.create_from_model_path(model_path)
+        model_file = open('models/C_G_D_model_better.task', "rb")
+        model_data = model_file.read()
+        model_file.close()
+
+        base_options = python.BaseOptions(model_asset_buffer=model_data)
+        options = vision.GestureRecognizerOptions(base_options=base_options)
+        self.recognizer = vision.GestureRecognizer.create_from_options(options)
+
 
     def mark_gesture(self, frame):
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
         recognition_result = self.recognizer.recognize(mp_image)
-        print(recognition_result)
         top_gesture = recognition_result.gestures
         if len(top_gesture):
-            if top_gesture[0][0].score > 0.65:
-                # print(top_gesture[0][0].category_name)
+            if top_gesture[0][0].score > 0.5:
+                print("Classification:", top_gesture[0][0].category_name)
                 if top_gesture[0][0].category_name == '':
                     self.classification = "-"
                 else:
@@ -107,12 +118,8 @@ class Detection:
             for hand_id, hand_landmark in enumerate(result.multi_hand_landmarks):
                 if result.multi_handedness[0].classification[0].score < 0.95:
                     continue
-                for finger_id, landmark in enumerate(hand_landmark.landmark):
-                    if hand_id == 0:
-                        x, y = int(landmark.x * self.size[0]), int(landmark.y * self.size[1])
-                        # self.save_positions([x, y, finger_id])
-                        # print(f'Hand: {hand_id}, Finger: {finger_id}, X: {x}, Y: {y}')
                 if hand_id == 0:
+                    self.get_subframe_position(hand_landmark.landmark)
                     self.mp_drawing_utils.draw_landmarks(frame, hand_landmark, self.mp_hands.HAND_CONNECTIONS)
 
 
@@ -122,6 +129,16 @@ class Detection:
             csvwriter = csv.writer(file)
             csvwriter.writerow(data)
         print("done")
+
+    def get_subframe_position(self, hand_landmark):
+        scale = 0.2
+        X, Y = [], []
+        for finger_id, landmark in enumerate(hand_landmark):
+            x, y = int(landmark.x * self.size[0]), int(landmark.y * self.size[1])
+            X.append(x)
+            Y.append(y)
+        self.subframe[0] = [max(int(min(X)-self.size[0]*scale), 0), min(int(max(X)+self.size[0]*scale), self.size[0])]
+        self.subframe[1] = [max(int(min(Y)-self.size[1]*scale), 0), min(int(max(Y)+self.size[1]*scale), self.size[1])]
 
     def mark_guitar(self, frame):
         guitar_result = self.guitar_model.predict(frame)
