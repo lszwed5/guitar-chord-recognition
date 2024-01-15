@@ -1,9 +1,5 @@
-<<<<<<< Updated upstream
-Siema :)
-=======
 from detection import Detection
 
-test = Detection('videos/czarna_piesn.mp4')
-# test.resize((250, 450))
+test = Detection('videos/C_close_up.mp4', reflection=True)
+# test.resize((720, 1280))
 test.show()
->>>>>>> Stashed changes
