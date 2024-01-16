@@ -34,7 +34,7 @@ class Detection:
     def reflect_video(self, frame):
         return cv2.flip(frame, 1)
 
-    def show(self):
+    def show(self, guitar=True, fingers=True):
         self.init_YOLO_model()
         self.init_MP_gesture_model()
         self.init_MP_model()
@@ -61,14 +61,16 @@ class Detection:
             if len(self.subframe[0]):
                 print('X:', self.subframe[0])
                 print('Y:', self.subframe[1])
-                subframe = frame[self.subframe[1][0]:self.subframe[1][1], self.subframe[0][0]:self.subframe[0][1]]
+                subframe = frame[self.subframe[1][0]:self.subframe[1][1],
+                                 self.subframe[0][0]:self.subframe[0][1]]
             else:
                 subframe = frame
 
             # self.mark_gesture(frame)
             self.mark_gesture(np.array(subframe))
-            self.mark_fingers(frame)
-            self.mark_guitar(frame)
+            self.mark_fingers(frame, fingers)
+            if guitar:
+                self.mark_guitar(frame)
             self.display_classification(frame, self.classification)
             self.display_FPS(frame)
 
@@ -79,7 +81,6 @@ class Detection:
         video_capture.release()
         cv2.destroyAllWindows()
 
-
     def init_YOLO_model(self):
         self.guitar_model = YOLO('models/best_run1.pt')
         data = open("coco.txt", "r").read()
@@ -87,7 +88,9 @@ class Detection:
 
     def init_MP_model(self):
         self.mp_hands = mp.solutions.hands
-        self.hands = self.mp_hands.Hands(static_image_mode=False, max_num_hands=2, min_detection_confidence=0.5)
+        self.hands = self.mp_hands.Hands(static_image_mode=False,
+                                         max_num_hands=2,
+                                         min_detection_confidence=0.5)
         self.mp_drawing_utils = mp.solutions.drawing_utils
 
     def init_MP_gesture_model(self):
@@ -98,7 +101,6 @@ class Detection:
         base_options = python.BaseOptions(model_asset_buffer=model_data)
         options = vision.GestureRecognizerOptions(base_options=base_options)
         self.recognizer = vision.GestureRecognizer.create_from_options(options)
-
 
     def mark_gesture(self, frame):
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
@@ -112,16 +114,19 @@ class Detection:
                 else:
                     self.classification = top_gesture[0][0].category_name
 
-    def mark_fingers(self, frame):
+    def mark_fingers(self, frame, display):
         result = self.hands.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         if result.multi_hand_landmarks:
-            for hand_id, hand_landmark in enumerate(result.multi_hand_landmarks):
+            for hand_id, hand_landmark in enumerate(
+                    result.multi_hand_landmarks):
                 if result.multi_handedness[0].classification[0].score < 0.95:
                     continue
                 if hand_id == 0:
                     self.get_subframe_position(hand_landmark.landmark)
-                    self.mp_drawing_utils.draw_landmarks(frame, hand_landmark, self.mp_hands.HAND_CONNECTIONS)
-
+                    if display:
+                        self.mp_drawing_utils.draw_landmarks(
+                            frame, hand_landmark,
+                            self.mp_hands.HAND_CONNECTIONS)
 
     def save_positions(self, data):
         output_file = 'data/g.csv'
@@ -134,11 +139,16 @@ class Detection:
         scale = 0.2
         X, Y = [], []
         for finger_id, landmark in enumerate(hand_landmark):
-            x, y = int(landmark.x * self.size[0]), int(landmark.y * self.size[1])
+            x, y = int(landmark.x * self.size[0]), int(
+                landmark.y * self.size[1])
             X.append(x)
             Y.append(y)
-        self.subframe[0] = [max(int(min(X)-self.size[0]*scale), 0), min(int(max(X)+self.size[0]*scale), self.size[0])]
-        self.subframe[1] = [max(int(min(Y)-self.size[1]*scale), 0), min(int(max(Y)+self.size[1]*scale), self.size[1])]
+        self.subframe[0] = [max(int(min(X) - self.size[0] * scale), 0),
+                            min(int(max(X) + self.size[0] * scale),
+                                self.size[0])]
+        self.subframe[1] = [max(int(min(Y) - self.size[1] * scale), 0),
+                            min(int(max(Y) + self.size[1] * scale),
+                                self.size[1])]
 
     def mark_guitar(self, frame):
         guitar_result = self.guitar_model.predict(frame)
@@ -177,8 +187,8 @@ class Detection:
 
         cv2.rectangle(
             frame,
-            (width//2-50, height),
-            (width//2+50, height-80),
+            (width // 2 - 50, height),
+            (width // 2 + 50, height - 80),
             (50, 50, 50),
             -1
         )
@@ -186,7 +196,7 @@ class Detection:
         cv2.putText(
             frame,
             text,
-            (width//2-25, height-20),
+            (width // 2 - 25, height - 20),
             cv2.FONT_HERSHEY_COMPLEX,
             2,
             (255, 255, 255),
