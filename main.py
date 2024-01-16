@@ -1,5 +1,8 @@
-from detection import Detection
+from GUI import App
+import tkinter as tk
 
-test = Detection('videos/C_G_D.mp4', reflection=True)
-test.resize((1200, 600))
-test.show(guitar=True, fingers=True)
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = App(root)
+    root.mainloop()
